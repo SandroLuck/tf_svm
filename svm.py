@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
-
+from visualize import display_graph
+from sklearn import metrics
 
 class SVM:
     """
@@ -75,7 +76,7 @@ class SVM:
 
         self._init_params_post_build_graph()
 
-    def fit(self, x, y):
+    def fit(self, x, y, x_valid=None, y_valid=None):
         """
         Learn model
         :param x: (num_samples, input_dim)
@@ -86,6 +87,9 @@ class SVM:
 
         num_iterations = int(self.num_epochs * num_samples / self.batch_size)
 
+        loss_train_list = []
+        if x_valid is not None:
+            loss_test_list = []
         for it in range(num_iterations):
             idx_samples = np.random.randint(0, num_samples, self.batch_size)
             feed_data = {
@@ -94,15 +98,35 @@ class SVM:
                 self.omega: self.omega_value,
             }
             _, loss = self.session.run([self.trainer, self.mean_loss], feed_dict=feed_data)
-            print('Iter', it, ': loss=', loss)
+            if it % 1 == 0:
+                _, loss_training_set = self.update_forward(x, y)
+                loss_train_list.append(np.mean(loss_training_set))
+                if x_valid is not None:
+                    _, loss_testing_set = self.update_forward(x_valid, y_valid)
+                    loss_test_list.append(np.mean(loss_testing_set))
+                if x_valid is None:
+                    display_graph([loss_train_list], ['loss_train'], ['red'])
+                else:
+                    display_graph([loss_train_list, loss_test_list], ['loss_train', 'loss_test'], ['red', 'blue'])
+
+            # print('Iter', it, ': loss=', np.mean(loss))
 
     def predict(self, x_test):
+        y_predict, _ = self.update_forward(x_test)
+
+    def update_forward(self, x_test, y_test=None):
         """
         Predict labels
         :param x_test: (num_tests, input_dim)
+        :param y_test: (num_tests) None if we want to use it as predict function, If not None is to compute loss
         """
         num_tests = x_test.shape[0]
-        y_predict = np.ones(num_tests, dtype=int)
+        if y_test is None:
+            y_predict = np.ones(num_tests, dtype=int)
+        else:
+            y_predict = np.copy(y_test)
+
+        loss = np.ones(num_tests, dtype=np.float32)
 
         num_padding_test = int(np.ceil(num_tests / self.batch_size) * self.batch_size)
         idx_test = np.zeros(num_padding_test, dtype=int)
@@ -116,7 +140,8 @@ class SVM:
                 self.omega: self.omega_value,
             }
 
-            predict_value = self.session.run(self.predict_value, feed_dict=feed_data)
+            predict_value, loss_value = self.session.run([self.predict_value, self.loss], feed_dict=feed_data)
             y_predict[idx_batch] = np.sign(predict_value)
+            loss[idx_batch] = loss_value
 
-        return y_predict
+        return y_predict, loss

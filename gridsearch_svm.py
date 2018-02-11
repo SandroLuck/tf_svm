@@ -11,7 +11,7 @@ from sklearn import metrics
 from sklearn.model_selection import ParameterGrid
 
 
-def run_one_candidate(dataset, candidate_params):
+def run_one_candidate(dataset, candidate_params, test_on_valid_set=True):
     print("========== Tune parameters for classification ==========")
 
     np.random.seed(1000)
@@ -26,15 +26,31 @@ def run_one_candidate(dataset, candidate_params):
             num_epochs=20,
         )
 
-        x_train, y_train = load_svmlight_file(dataset + '.txt')
-        x_test, y_test = load_svmlight_file(dataset + '_t.txt')
-        x_train = x_train.toarray()
-        x_test = x_test.toarray()
+        if test_on_valid_set:
+            x_train_all, y_train_all = load_svmlight_file(dataset + '.txt')
+            x_train_all = x_train_all.toarray()
+            total_samples = x_train_all.shape[0]
+            mask = np.zeros(total_samples, dtype=bool)
+            num_train_samples = int(0.8 * total_samples)
+            mask[np.random.permutation(total_samples)[num_train_samples]] = True
+            x_train = x_train_all[mask, :]
+            y_train = y_train_all[mask]
+            mask = not mask
+            x_test = x_train_all[mask, :]
+            y_test = y_train_all[mask]
+        else:
+            x_train, y_train = load_svmlight_file(dataset + '.txt')
+            x_test, y_test = load_svmlight_file(dataset + '_t.txt')
+            x_train = x_train.toarray()
+            x_test = x_test.toarray()
 
         y_train[y_train == 0] = -1
         y_test[y_test == 0] = -1
 
-        learner.fit(x_train, y_train)
+        if test_on_valid_set:
+            learner.fit(x_train, y_train, x_test, y_test)
+        else:
+            learner.fit(x_train, y_train)
 
         y_test_predict = learner.predict(x_test)
         test_acc = metrics.accuracy_score(y_test, y_test_predict)
@@ -80,7 +96,7 @@ def run_grid_search_multicore(dataset):
     print("========== FINAL RESULT ==========")
 
     idx_best = np.argmax(np.array(test_acc_lst))
-    print('Best testing acc: {}'.format(test_acc_lst[idx_best]))
+    print('Best acc on valid set: {}'.format(test_acc_lst[idx_best]))
     print('Best params: {}'.format(run_param_lst[idx_best]))
 
 if __name__ == '__main__':

@@ -24,7 +24,7 @@ for it in range(2):
     y_train[y_train == 0] = -1
     y_test[y_test == 0] = -1
 
-    learner.fit(x_train, y_train)
+    learner.fit(x_train, y_train, x_test, y_test)
 
     y_test_predict = learner.predict(x_test)
     test_acc = metrics.accuracy_score(y_test, y_test_predict)
